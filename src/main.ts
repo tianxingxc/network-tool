@@ -43,6 +43,13 @@ function setVal(id: string, val: string) {
   if (el) el.value = val;
 }
 
+const hashAlgorithms: Record<string, (input: string) => string> = {
+  MD5: md5,
+  'SHA-1': sha1,
+  'SHA-256': sha256,
+  'SHA-512': sha512,
+};
+
 // ========== Render App ==========
 function renderApp() {
   const app = $('#app')!;
@@ -64,6 +71,15 @@ function renderApp() {
     <div class="tab-content active" id="tab-hash">
       <div class="card">
         <div class="card-title">哈希计算</div>
+        <div class="form-group">
+          <label>哈希算法</label>
+          <select id="hash-algo">
+            <option value="MD5">MD5</option>
+            <option value="SHA-1">SHA-1</option>
+            <option value="SHA-256" selected>SHA-256</option>
+            <option value="SHA-512">SHA-512</option>
+          </select>
+        </div>
         <div class="form-group">
           <label>输入文本</label>
           <textarea id="hash-input" placeholder="输入要计算哈希的文本..."></textarea>
@@ -158,16 +174,15 @@ function renderApp() {
         <div class="form-group">
           <label>密钥长度</label>
           <select id="rsa-keysize">
-            <option value="2048">2048 bit</option>
+            <option value="512">512 bit</option>
+            <option value="1024">1024 bit</option>
+            <option value="2048" selected>2048 bit</option>
             <option value="3072">3072 bit</option>
             <option value="4096">4096 bit</option>
           </select>
         </div>
         <div class="btn-row">
           <button class="btn btn-primary" id="rsa-gen">生成密钥对</button>
-        </div>
-        <div id="rsa-secure-warn" style="display:none;color:var(--warning);font-size:0.82rem;margin-bottom:12px;">
-          ⚠ 需要通过 HTTPS 或 localhost 访问才能使用 RSA 功能
         </div>
         <div class="grid-2">
           <div class="form-group">
@@ -188,7 +203,7 @@ function renderApp() {
       </div>
 
       <div class="card">
-        <div class="card-title">RSA 加密解密 <span class="badge">OAEP</span></div>
+        <div class="card-title">RSA 加密解密</div>
         <div class="form-group">
           <label>公钥 (PEM)</label>
           <textarea id="rsa-enc-pubkey" placeholder="粘贴公钥PEM..." style="min-height:120px;"></textarea>
@@ -200,11 +215,11 @@ function renderApp() {
         <div class="grid-2">
           <div class="form-group">
             <label>明文</label>
-            <textarea id="rsa-plain" class="small" placeholder="RSA加密有长度限制(2048bit最多190字节)..."></textarea>
+            <textarea id="rsa-plain" class="small" placeholder="输入要加密的明文..."></textarea>
           </div>
           <div class="form-group">
             <label>密文 (Base64)</label>
-            <textarea id="rsa-cipher" class="small" placeholder="RSA解密结果..."></textarea>
+            <textarea id="rsa-cipher" class="small" placeholder="输入要解密的密文..."></textarea>
           </div>
         </div>
         <div class="btn-row">
@@ -342,23 +357,21 @@ function bindEvents() {
   // ---- Hash ----
   $('#hash-calc')?.addEventListener('click', () => {
     const input = getVal('hash-input');
+    const algo = getVal('hash-algo');
     if (!input) { showToast('请输入文本', 'error'); return; }
-    const results = [
-      { label: 'MD5', value: md5(input) },
-      { label: 'SHA-1', value: sha1(input) },
-      { label: 'SHA-256', value: sha256(input) },
-      { label: 'SHA-512', value: sha512(input) },
-    ];
+    const fn = hashAlgorithms[algo];
+    if (!fn) { showToast('未知算法', 'error'); return; }
+    const value = fn(input);
     const container = $('#hash-results')!;
-    container.innerHTML = results.map(r => `
+    container.innerHTML = `
       <div class="hash-item">
-        <span class="hash-label">${r.label}</span>
-        <span class="hash-value">${r.value}</span>
-        <button class="hash-copy" data-copy="${r.value}">复制</button>
+        <span class="hash-label">${algo}</span>
+        <span class="hash-value">${value}</span>
+        <button class="hash-copy" data-copy="${value}">复制</button>
       </div>
-    `).join('');
-    container.querySelectorAll('.hash-copy').forEach(btn => {
-      btn.addEventListener('click', () => copyText((btn as HTMLElement).dataset.copy!));
+    `;
+    container.querySelector('.hash-copy')?.addEventListener('click', function() {
+      copyText((this as HTMLElement).dataset.copy!);
     });
   });
 
@@ -448,66 +461,60 @@ function bindEvents() {
   });
 
   // ---- RSA ----
-  // Check secure context for RSA
-  if (!window.crypto || !window.crypto.subtle) {
-    const warn = $('#rsa-secure-warn');
-    if (warn) warn.style.display = 'block';
-  }
+  let rsaPubKeyText = '';
+  let rsaPrivKeyText = '';
 
-  $('#rsa-gen')?.addEventListener('click', async () => {
-    const keySize = parseInt(getVal('rsa-keysize')) as 2048 | 3072 | 4096;
+  $('#rsa-gen')?.addEventListener('click', () => {
+    const keySize = parseInt(getVal('rsa-keysize'));
     const btn = $('#rsa-gen')!;
     const origText = btn.textContent;
     btn.innerHTML = '<span class="spinner"></span> 生成中...';
     (btn as HTMLButtonElement).disabled = true;
-    try {
-      const pair = await generateRSAKeyPair(keySize);
-      ($('#rsa-pubkey') as HTMLElement).textContent = pair.publicKey;
-      ($('#rsa-privkey') as HTMLElement).textContent = pair.privateKey;
-      setVal('rsa-enc-pubkey', pair.publicKey);
-      setVal('rsa-enc-privkey', pair.privateKey);
-      showToast(`RSA ${keySize}bit 密钥对生成成功`);
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      if (msg.includes('Web Crypto')) {
-        showToast(msg, 'error');
-      } else {
-        showToast('生成失败: ' + msg, 'error');
+    // Use setTimeout to let UI update before blocking key generation
+    setTimeout(() => {
+      try {
+        const pair = generateRSAKeyPair(keySize);
+        rsaPubKeyText = pair.publicKey;
+        rsaPrivKeyText = pair.privateKey;
+        ($('#rsa-pubkey') as HTMLElement).textContent = pair.publicKey;
+        ($('#rsa-privkey') as HTMLElement).textContent = pair.privateKey;
+        setVal('rsa-enc-pubkey', pair.publicKey);
+        setVal('rsa-enc-privkey', pair.privateKey);
+        showToast(`RSA ${keySize}bit 密钥对生成成功`);
+      } catch (e: any) {
+        showToast('生成失败: ' + (e?.message || String(e)), 'error');
+        console.error('RSA keygen error:', e);
+      } finally {
+        btn.textContent = origText;
+        (btn as HTMLButtonElement).disabled = false;
       }
-      console.error('RSA keygen error:', e);
-    } finally {
-      btn.textContent = origText;
-      (btn as HTMLButtonElement).disabled = false;
-    }
+    }, 50);
   });
 
-  // Copy RSA keys on click
-  $('#rsa-pubkey')?.addEventListener('click', function() {
-    const text = this.textContent || '';
-    if (text && text !== '点击"生成密钥对"开始') copyText(text);
+  $('#rsa-pubkey-copy')?.addEventListener('click', () => {
+    if (rsaPubKeyText) copyText(rsaPubKeyText);
   });
-  $('#rsa-privkey')?.addEventListener('click', function() {
-    const text = this.textContent || '';
-    if (text) copyText(text);
+  $('#rsa-privkey-copy')?.addEventListener('click', () => {
+    if (rsaPrivKeyText) copyText(rsaPrivKeyText);
   });
 
-  $('#rsa-enc')?.addEventListener('click', async () => {
+  $('#rsa-enc')?.addEventListener('click', () => {
     const plain = getVal('rsa-plain');
     const pubkey = getVal('rsa-enc-pubkey');
     if (!plain || !pubkey) { showToast('请输入明文和公钥', 'error'); return; }
     try {
-      const cipher = await rsaEncrypt(plain, pubkey);
+      const cipher = rsaEncrypt(plain, pubkey);
       setVal('rsa-cipher', cipher);
       showToast('RSA加密成功');
     } catch (e: any) { showToast('加密失败: ' + e.message, 'error'); }
   });
 
-  $('#rsa-dec')?.addEventListener('click', async () => {
+  $('#rsa-dec')?.addEventListener('click', () => {
     const cipher = getVal('rsa-cipher');
     const privkey = getVal('rsa-enc-privkey');
     if (!cipher || !privkey) { showToast('请输入密文和私钥', 'error'); return; }
     try {
-      const plain = await rsaDecrypt(cipher, privkey);
+      const plain = rsaDecrypt(cipher, privkey);
       setVal('rsa-plain', plain);
       showToast('RSA解密成功');
     } catch (e: any) { showToast('解密失败: ' + e.message, 'error'); }
@@ -590,16 +597,15 @@ function bindEvents() {
     const fromBase = parseInt(getVal('conv-from')) as 2 | 8 | 10 | 16 | 32 | 36;
     if (!input) { showToast('请输入数值', 'error'); return; }
 
-    // Validate input for the source base
-    const validChars: Record<number, string> = {
-      2: '01', 8: '0-7', 10: '0-9', 16: '0-9a-fA-F', 32: '0-9a-vA-V', 36: '0-9a-zA-Z',
-    };
     const patterns: Record<number, RegExp> = {
       2: /^[01]+$/, 8: /^[0-7]+$/, 10: /^[0-9]+$/,
       16: /^[0-9a-fA-F]+$/, 32: /^[0-9a-zA-V]+$/, 36: /^[0-9a-zA-Z]+$/,
     };
+    const hints: Record<number, string> = {
+      2: '0和1', 8: '0-7', 10: '0-9', 16: '0-9和a-f', 32: '0-9和a-v', 36: '0-9和a-z',
+    };
     if (!patterns[fromBase]?.test(input)) {
-      showToast(`${validChars[fromBase]} 进制只能包含字符: ${validChars[fromBase]}`, 'error');
+      showToast(`输入不是有效的${hints[fromBase]}进制数`, 'error');
       return;
     }
 
@@ -616,7 +622,6 @@ function bindEvents() {
       `;
     }).join('');
     container.innerHTML = html;
-    // Add copy buttons
     container.querySelectorAll('input').forEach(inp => {
       (inp as HTMLElement).style.cursor = 'pointer';
       inp.addEventListener('click', () => copyText((inp as HTMLInputElement).value));
