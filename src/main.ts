@@ -2,6 +2,7 @@ import './ui/styles.css';
 import {
   aesEncrypt, aesDecrypt, desEncrypt, desDecrypt, tripleDesEncrypt, tripleDesDecrypt,
   generateRSAKeyPair, rsaEncrypt, rsaDecrypt,
+  type RSAPadding,
   md5, sha1, sha256, sha512, hmacSHA256,
   base64Encode, base64Decode, urlEncode, urlDecode, htmlEncode, htmlDecode,
   unicodeEncode, unicodeDecode, hexEncode, hexDecode,
@@ -204,6 +205,13 @@ function renderApp() {
 
       <div class="card">
         <div class="card-title">RSA 加密解密</div>
+        <div class="form-group">
+          <label>填充方式</label>
+          <select id="rsa-padding">
+            <option value="PKCS1_V1_5">PKCS#1 v1.5</option>
+            <option value="OAEP">OAEP (SHA-256)</option>
+          </select>
+        </div>
         <div class="form-group">
           <label>公钥 (PEM)</label>
           <textarea id="rsa-enc-pubkey" placeholder="粘贴公钥PEM..." style="min-height:120px;"></textarea>
@@ -498,9 +506,10 @@ function bindEvents() {
   $('#rsa-enc')?.addEventListener('click', () => {
     const plain = getVal('rsa-plain');
     const pubkey = getVal('rsa-enc-pubkey');
+    const padding = getVal('rsa-padding') as RSAPadding;
     if (!plain || !pubkey) { showToast('请输入明文和公钥', 'error'); return; }
     try {
-      const cipher = rsaEncrypt(plain, pubkey);
+      const cipher = rsaEncrypt(plain, pubkey, padding);
       setVal('rsa-cipher', cipher);
       showToast('RSA加密成功');
     } catch (e: any) { showToast('加密失败: ' + e.message, 'error'); }
@@ -509,9 +518,10 @@ function bindEvents() {
   $('#rsa-dec')?.addEventListener('click', () => {
     const cipher = getVal('rsa-cipher');
     const privkey = getVal('rsa-enc-privkey');
+    const padding = getVal('rsa-padding') as RSAPadding;
     if (!cipher || !privkey) { showToast('请输入密文和私钥', 'error'); return; }
     try {
-      const plain = rsaDecrypt(cipher, privkey);
+      const plain = rsaDecrypt(cipher, privkey, padding);
       setVal('rsa-plain', plain);
       showToast('RSA解密成功');
     } catch (e: any) { showToast('解密失败: ' + e.message, 'error'); }
