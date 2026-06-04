@@ -145,8 +145,8 @@ function renderApp() {
         <div class="btn-row">
           <button class="btn btn-primary" id="des-enc">DES 加密</button>
           <button class="btn btn-success" id="des-dec">DES 解密</button>
-          <button class="btn btn-primary" id="3des-enc">3DES 加密</button>
-          <button class="btn btn-success" id="3des-dec">3DES 解密</button>
+          <button class="btn btn-primary" id="tdes-enc">3DES 加密</button>
+          <button class="btn btn-success" id="tdes-dec">3DES 解密</button>
         </div>
       </div>
     </div>
@@ -166,16 +166,23 @@ function renderApp() {
         <div class="btn-row">
           <button class="btn btn-primary" id="rsa-gen">生成密钥对</button>
         </div>
-        <div class="form-group">
-          <label>公钥 (PEM)</label>
-          <div class="result-area">
-            <div class="key-display" id="rsa-pubkey" style="min-height:60px;max-height:180px;">点击"生成密钥对"开始</div>
-          </div>
+        <div id="rsa-secure-warn" style="display:none;color:var(--warning);font-size:0.82rem;margin-bottom:12px;">
+          ⚠ 需要通过 HTTPS 或 localhost 访问才能使用 RSA 功能
         </div>
-        <div class="form-group">
-          <label>私钥 (PEM)</label>
-          <div class="result-area">
-            <div class="key-display" id="rsa-privkey" style="min-height:60px;max-height:180px;"></div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label>公钥 (PEM)</label>
+            <div class="result-area">
+              <button class="copy-btn" id="rsa-pubkey-copy">复制</button>
+              <div class="key-display" id="rsa-pubkey">点击"生成密钥对"开始</div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>私钥 (PEM)</label>
+            <div class="result-area">
+              <button class="copy-btn" id="rsa-privkey-copy">复制</button>
+              <div class="key-display" id="rsa-privkey"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -184,11 +191,11 @@ function renderApp() {
         <div class="card-title">RSA 加密解密 <span class="badge">OAEP</span></div>
         <div class="form-group">
           <label>公钥 (PEM)</label>
-          <textarea id="rsa-enc-pubkey" class="small" placeholder="粘贴公钥PEM..."></textarea>
+          <textarea id="rsa-enc-pubkey" placeholder="粘贴公钥PEM..." style="min-height:120px;"></textarea>
         </div>
         <div class="form-group">
           <label>私钥 (PEM)</label>
-          <textarea id="rsa-enc-privkey" class="small" placeholder="粘贴私钥PEM..."></textarea>
+          <textarea id="rsa-enc-privkey" placeholder="粘贴私钥PEM..." style="min-height:120px;"></textarea>
         </div>
         <div class="grid-2">
           <div class="form-group">
@@ -252,12 +259,12 @@ function renderApp() {
           <textarea id="enc-input" class="small" placeholder="输入文本..."></textarea>
         </div>
         <div class="btn-row">
-          <button class="btn btn-primary btn-sm" id="html-enc">HTML编码</button>
-          <button class="btn btn-outline btn-sm" id="html-dec">HTML解码</button>
-          <button class="btn btn-primary btn-sm" id="unicode-enc">Unicode编码</button>
-          <button class="btn btn-outline btn-sm" id="unicode-dec">Unicode解码</button>
-          <button class="btn btn-primary btn-sm" id="hex-enc">Hex编码</button>
-          <button class="btn btn-outline btn-sm" id="hex-dec">Hex解码</button>
+          <button class="btn btn-primary btn-sm" id="html-enc">HTML 编码</button>
+          <button class="btn btn-success btn-sm" id="html-dec">HTML 解码</button>
+          <button class="btn btn-primary btn-sm" id="unicode-enc">Unicode 编码</button>
+          <button class="btn btn-success btn-sm" id="unicode-dec">Unicode 解码</button>
+          <button class="btn btn-primary btn-sm" id="hex-enc">Hex 编码</button>
+          <button class="btn btn-success btn-sm" id="hex-dec">Hex 解码</button>
         </div>
         <div class="form-group">
           <label>结果</label>
@@ -420,7 +427,7 @@ function bindEvents() {
     } catch (e: any) { showToast('解密失败: ' + e.message, 'error'); }
   });
 
-  $('#3des-enc')?.addEventListener('click', () => {
+  $('#tdes-enc')?.addEventListener('click', () => {
     const plain = getVal('des-plain');
     const key = getVal('des-key');
     if (!plain || !key) { showToast('请输入明文和密钥', 'error'); return; }
@@ -430,7 +437,7 @@ function bindEvents() {
     } catch (e: any) { showToast('加密失败: ' + e.message, 'error'); }
   });
 
-  $('#3des-dec')?.addEventListener('click', () => {
+  $('#tdes-dec')?.addEventListener('click', () => {
     const cipher = getVal('des-cipher');
     const key = getVal('des-key');
     if (!cipher || !key) { showToast('请输入密文和密钥', 'error'); return; }
@@ -441,12 +448,18 @@ function bindEvents() {
   });
 
   // ---- RSA ----
+  // Check secure context for RSA
+  if (!window.crypto || !window.crypto.subtle) {
+    const warn = $('#rsa-secure-warn');
+    if (warn) warn.style.display = 'block';
+  }
+
   $('#rsa-gen')?.addEventListener('click', async () => {
     const keySize = parseInt(getVal('rsa-keysize')) as 2048 | 3072 | 4096;
     const btn = $('#rsa-gen')!;
     const origText = btn.textContent;
     btn.innerHTML = '<span class="spinner"></span> 生成中...';
-    btn.setAttribute('disabled', 'true');
+    (btn as HTMLButtonElement).disabled = true;
     try {
       const pair = await generateRSAKeyPair(keySize);
       ($('#rsa-pubkey') as HTMLElement).textContent = pair.publicKey;
@@ -455,10 +468,16 @@ function bindEvents() {
       setVal('rsa-enc-privkey', pair.privateKey);
       showToast(`RSA ${keySize}bit 密钥对生成成功`);
     } catch (e: any) {
-      showToast('生成失败: ' + e.message, 'error');
+      const msg = e?.message || String(e);
+      if (msg.includes('Web Crypto')) {
+        showToast(msg, 'error');
+      } else {
+        showToast('生成失败: ' + msg, 'error');
+      }
+      console.error('RSA keygen error:', e);
     } finally {
       btn.textContent = origText;
-      btn.removeAttribute('disabled');
+      (btn as HTMLButtonElement).disabled = false;
     }
   });
 
@@ -567,9 +586,23 @@ function bindEvents() {
   const baseIds: Record<string, string> = { '2': 'BIN', '8': 'OCT', '10': 'DEC', '16': 'HEX', '32': 'B32', '36': 'B36' };
 
   $('#conv-convert')?.addEventListener('click', () => {
-    const input = getVal('conv-input');
+    const input = getVal('conv-input').trim();
     const fromBase = parseInt(getVal('conv-from')) as 2 | 8 | 10 | 16 | 32 | 36;
     if (!input) { showToast('请输入数值', 'error'); return; }
+
+    // Validate input for the source base
+    const validChars: Record<number, string> = {
+      2: '01', 8: '0-7', 10: '0-9', 16: '0-9a-fA-F', 32: '0-9a-vA-V', 36: '0-9a-zA-Z',
+    };
+    const patterns: Record<number, RegExp> = {
+      2: /^[01]+$/, 8: /^[0-7]+$/, 10: /^[0-9]+$/,
+      16: /^[0-9a-fA-F]+$/, 32: /^[0-9a-zA-V]+$/, 36: /^[0-9a-zA-Z]+$/,
+    };
+    if (!patterns[fromBase]?.test(input)) {
+      showToast(`${validChars[fromBase]} 进制只能包含字符: ${validChars[fromBase]}`, 'error');
+      return;
+    }
+
     const container = $('#conv-results')!;
     const names = getBaseNames();
     const html = Object.entries(names).map(([base, name]) => {

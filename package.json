@@ -13,6 +13,7 @@
   "description": "",
   "dependencies": {
     "crypto-js": "^4.2.0",
+    "jsencrypt": "^3.5.4",
     "typescript": "^6.0.3",
     "vite": "^5.4.21"
   },
