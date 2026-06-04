@@ -304,19 +304,8 @@ function renderApp() {
       <div class="card">
         <div class="card-title">进制转换</div>
         <div class="form-group">
-          <label>输入数值</label>
-          <input type="text" id="conv-input" placeholder="输入数值..." />
-        </div>
-        <div class="form-group">
-          <label>输入进制</label>
-          <select id="conv-from">
-            <option value="2">二进制 (Binary)</option>
-            <option value="8">八进制 (Octal)</option>
-            <option value="10" selected>十进制 (Decimal)</option>
-            <option value="16">十六进制 (Hex)</option>
-            <option value="32">三十二进制</option>
-            <option value="36">三十六进制</option>
-          </select>
+          <label>输入数值 (十进制)</label>
+          <input type="text" id="conv-input" placeholder="输入十进制数值..." />
         </div>
         <div class="btn-row">
           <button class="btn btn-primary" id="conv-convert">转换</button>
@@ -597,33 +586,35 @@ function bindEvents() {
   });
 
   // ---- Base Conversion ----
-  const baseIds: Record<string, string> = { '2': 'BIN', '8': 'OCT', '10': 'DEC', '16': 'HEX', '32': 'B32', '36': 'B36' };
+  const baseIds: Record<string, string> = { '2': 'BIN', '8': 'OCT', '10': 'DEC', '16': 'HEX', '32': 'B32', '36': 'B36', '62': 'B62' };
 
   $('#conv-convert')?.addEventListener('click', () => {
     const input = getVal('conv-input').trim();
-    const fromBase = parseInt(getVal('conv-from')) as 2 | 8 | 10 | 16 | 32 | 36;
     if (!input) { showToast('请输入数值', 'error'); return; }
 
-    const patterns: Record<number, RegExp> = {
-      2: /^[01]+$/, 8: /^[0-7]+$/, 10: /^[0-9]+$/,
-      16: /^[0-9a-fA-F]+$/, 32: /^[0-9a-zA-V]+$/, 36: /^[0-9a-zA-Z]+$/,
-    };
-    const hints: Record<number, string> = {
-      2: '0和1', 8: '0-7', 10: '0-9', 16: '0-9和a-f', 32: '0-9和a-v', 36: '0-9和a-z',
-    };
-    if (!patterns[fromBase]?.test(input)) {
-      showToast(`输入不是有效的${hints[fromBase]}进制数`, 'error');
+    if (!/^[0-9]+$/.test(input)) {
+      showToast('请输入有效的十进制数', 'error');
       return;
     }
 
     const container = $('#conv-results')!;
     const names = getBaseNames();
+    const baseDescriptions: Record<number, string> = {
+      2: '0-1',
+      8: '0-7',
+      10: '0-9',
+      16: '0-9, A-F',
+      32: '0-9, A-V',
+      36: '0-9, A-Z',
+      62: '0-9, A-Z, a-z',
+    };
     const html = Object.entries(names).map(([base, name]) => {
-      const b = parseInt(base) as 2 | 8 | 10 | 16 | 32 | 36;
-      const val = convertBase(input, fromBase, b);
+      const b = parseInt(base) as 2 | 8 | 10 | 16 | 32 | 36 | 62;
+      const val = convertBase(input, 10, b);
+      const desc = baseDescriptions[b] || '';
       return `
         <div class="convert-item">
-          <label>${name}</label>
+          <label>${name} <span style="font-weight:400;color:var(--text-muted);font-size:0.75rem;">字符集: ${desc}</span></label>
           <input type="text" value="${val}" readonly id="conv-${baseIds[base]}" />
         </div>
       `;
