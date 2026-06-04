@@ -464,31 +464,28 @@ function bindEvents() {
   let rsaPubKeyText = '';
   let rsaPrivKeyText = '';
 
-  $('#rsa-gen')?.addEventListener('click', () => {
+  $('#rsa-gen')?.addEventListener('click', async () => {
     const keySize = parseInt(getVal('rsa-keysize'));
     const btn = $('#rsa-gen')!;
     const origText = btn.textContent;
     btn.innerHTML = '<span class="spinner"></span> 生成中...';
     (btn as HTMLButtonElement).disabled = true;
-    // Use setTimeout to let UI update before blocking key generation
-    setTimeout(() => {
-      try {
-        const pair = generateRSAKeyPair(keySize);
-        rsaPubKeyText = pair.publicKey;
-        rsaPrivKeyText = pair.privateKey;
-        ($('#rsa-pubkey') as HTMLElement).textContent = pair.publicKey;
-        ($('#rsa-privkey') as HTMLElement).textContent = pair.privateKey;
-        setVal('rsa-enc-pubkey', pair.publicKey);
-        setVal('rsa-enc-privkey', pair.privateKey);
-        showToast(`RSA ${keySize}bit 密钥对生成成功`);
-      } catch (e: any) {
-        showToast('生成失败: ' + (e?.message || String(e)), 'error');
-        console.error('RSA keygen error:', e);
-      } finally {
-        btn.textContent = origText;
-        (btn as HTMLButtonElement).disabled = false;
-      }
-    }, 50);
+    try {
+      const pair = await generateRSAKeyPair(keySize);
+      rsaPubKeyText = pair.publicKey;
+      rsaPrivKeyText = pair.privateKey;
+      ($('#rsa-pubkey') as HTMLElement).textContent = pair.publicKey;
+      ($('#rsa-privkey') as HTMLElement).textContent = pair.privateKey;
+      setVal('rsa-enc-pubkey', pair.publicKey);
+      setVal('rsa-enc-privkey', pair.privateKey);
+      showToast(`RSA ${keySize}bit 密钥对生成成功`);
+    } catch (e: any) {
+      showToast('生成失败: ' + (e?.message || String(e)), 'error');
+      console.error('RSA keygen error:', e);
+    } finally {
+      btn.textContent = origText;
+      (btn as HTMLButtonElement).disabled = false;
+    }
   });
 
   $('#rsa-pubkey-copy')?.addEventListener('click', () => {
