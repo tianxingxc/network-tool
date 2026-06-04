@@ -22,7 +22,7 @@ export function generateRSAKeyPair(keySize: number = 2048): Promise<RSAKeyPair> 
 
 export function rsaEncrypt(plaintext: string, publicKeyPem: string, padding: RSAPadding = 'PKCS1_V1_5'): string {
   const pubKey = forge.pki.publicKeyFromPem(publicKeyPem);
-  let encrypted: forge.util.ByteStringBuffer;
+  let encrypted: string;
   if (padding === 'OAEP') {
     encrypted = pubKey.encrypt(plaintext, 'RSA-OAEP', {
       md: forge.md.sha256.create(),
@@ -30,7 +30,7 @@ export function rsaEncrypt(plaintext: string, publicKeyPem: string, padding: RSA
   } else {
     encrypted = pubKey.encrypt(plaintext, 'RSAES-PKCS1-V1_5');
   }
-  return forge.util.encode64(encrypted.getBytes());
+  return forge.util.encode64(encrypted);
 }
 
 export function rsaDecrypt(ciphertext: string, privateKeyPem: string, padding: RSAPadding = 'PKCS1_V1_5'): string {
